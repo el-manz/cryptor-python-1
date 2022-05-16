@@ -1,6 +1,7 @@
 import math
 import random
 from tkinter import *
+from dataclasses import dataclass
 
 alphabet = [x.to_bytes(1, byteorder='big', signed=True).decode() for x in range(128)]
 
@@ -9,9 +10,16 @@ for pos in range(len(alphabet)):
     positions[alphabet[pos]] = pos
 
 
+def check_text(text):
+    for symbol in text:
+        if symbol not in alphabet:
+            return False
+    return True
+
+
 def caesar_encryption(text_to_decrypt, shift):
     def decrypt_letter(symbol_to_decrypt):
-        return alphabet[(positions[symbol_to_decrypt] - shift) % len(alphabet)]
+        return alphabet[(positions[symbol_to_decrypt] + shift) % len(alphabet)]
 
     answer = """"""
     for symbol in text_to_decrypt:
@@ -84,11 +92,54 @@ def vernam_decryption(text_to_decrypt, keys):
     return answer
 
 
+@dataclass(order=True)
+class LetterFrequency:
+    frequency: int
+    letter: str
+
+    def __init__(self, _letter, _text):
+        self.letter = _letter.upper()
+        self.frequency = _text.count(self.letter)
+
+
+def build_frequencies(text):
+    text = text.upper()
+
+    frequencies = []
+    sum = 0
+    for i in range(len(alphabet)):
+        frequencies.append(LetterFrequency(alphabet[i], text))
+        sum += frequencies[i].frequency
+    for i in range(len(frequencies)):
+        frequencies[i].frequency = frequencies[i].frequency / sum
+    frequencies.sort()
+    return frequencies
+
+
+def frequency_analysis(text_to_decrypt, standard_text):
+    standard_frequencies = build_frequencies(standard_text)
+
+    to_decrypt_frequencies = build_frequencies(text_to_decrypt)
+
+    to_decrypt_most_common = positions[to_decrypt_frequencies[-1].letter]
+    language_most_common = positions[standard_frequencies[-1].letter]
+    shift = abs(to_decrypt_most_common - language_most_common)
+
+    def decrypt_letter(symbol_to_decrypt):
+        return alphabet[(positions[symbol_to_decrypt] - shift) % len(alphabet)]
+
+    answer = """"""
+    for symbol in text_to_decrypt:
+        answer += decrypt_letter(symbol)
+
+    return answer
+
+
 class Window(Tk):
     def __init__(self, *args, **kwargs):
         Tk.__init__(self, *args, **kwargs)
         self.title("CryptorPython")
-        self.geometry("500x500")
+        self.geometry("500x580")
 
         container = Frame(self)
         container.pack(side="top", fill="both", expand=True)
@@ -97,7 +148,7 @@ class Window(Tk):
 
         self.frames = {}
         for F in (StartingWindow, CaesarEncryptionWindow, CaesarDecryptionWindow, VigenereEncryptionWindow,
-                  VigenereDecryptionWindow, VernamEncryptionWindow, VernamDecryptionWindow):
+                  VigenereDecryptionWindow, VernamEncryptionWindow, VernamDecryptionWindow, FrequencyAnalysisWindow):
             page_name = F.__name__
             frame = F(parent=container, controller=self)
             self.frames[page_name] = frame
@@ -134,6 +185,9 @@ class StartingWindow(Frame):
         vernam_decryption_mode = Button(self, text="Vernam Decryption", width=50, height=4,
                                         command=lambda: controller.show_frame("VernamDecryptionWindow"))
         vernam_decryption_mode.pack(side=TOP, pady=0)
+        frequency_analysis_mode = Button(self, text="Frequency Analysis", width=50, height=4,
+                                         command=lambda: controller.show_frame("FrequencyAnalysisWindow"))
+        frequency_analysis_mode.pack(side=TOP, pady=13)
 
 
 class CaesarEncryptionWindow(Frame):
@@ -157,26 +211,33 @@ class CaesarEncryptionWindow(Frame):
         def insert_keyword(path_to_file, entry_shift):
             shift = int(entry_shift.get())
             file = open(path_to_file)
-            encrypted = caesar_encryption(file.read(), shift)
+
+            to_encrypt = file.read()
+
+            encrypted = ""
+            if not check_text(to_encrypt):
+                encrypted = "Text contains wrong symbols!"
+            else:
+                encrypted = caesar_encryption(to_encrypt, shift)
 
             entry_path_encrypted = Entry(self, width=15)
-            entry_path_encrypted.pack(side=LEFT, padx=12)
+            entry_path_encrypted.place(anchor=CENTER, relx=0.17, rely=0.6)
             button_save_encrypted = Button(self, text="Save text",
                                            command=lambda: save_to_file(encrypted, entry_path_encrypted))
-            button_save_encrypted.pack(side=LEFT)
+            button_save_encrypted.place(anchor=E, relx=0.47, rely=0.6)
 
             entry_path_key = Entry(self, width=15)
+            entry_path_key.place(anchor=CENTER, relx=0.67, rely=0.6)
             button_save_key = Button(self, text="Save key",
                                      command=lambda: save_key_to_file(str(shift), entry_path_key))
-            button_save_key.pack(side=RIGHT, padx=12)
-            entry_path_key.pack(side=RIGHT)
+            button_save_key.place(anchor=E, relx=0.97, rely=0.6)
 
             text = Text(width=50, height=13)
             text.insert(INSERT, encrypted)
             text.configure(state='disabled')
             scroll = Scrollbar(command=text.yview)
-            scroll.pack(side=LEFT, fill=Y)
-            text.pack(side=LEFT, padx=55)
+            scroll.place(relx=0, rely=0.7, relheight=0.3)
+            text.place(anchor=N, relx=0.5, rely=0.7)
             text.config(yscrollcommand=scroll.set)
 
         def insert_path():
@@ -224,24 +285,30 @@ class CaesarDecryptionWindow(Frame):
                 key_file = open(key_path_to_file)
                 shift = int(key_file.read())
 
-            encrypted = caesar_decryption(file.read(), shift)
+            to_decrypt = file.read()
 
-            entry_path_encrypted = Entry(self, width=50)
-            button_save_encrypted = Button(self, text="Save text",
-                                           command=lambda: save_to_file(encrypted, entry_path_encrypted))
-            button_save_encrypted.pack(side=BOTTOM, pady=20)
-            entry_path_encrypted.pack(side=BOTTOM)
+            decrypted = ""
+            if not check_text(to_decrypt):
+                decrypted = "Text contains wrong symbols!"
+            else:
+                decrypted = caesar_decryption(to_decrypt, shift)
+
+            entry_path_decrypted = Entry(self, width=40)
+            entry_path_decrypted.place(anchor=CENTER, relx=0.45, rely=0.6)
+            button_save_decrypted = Button(self, text="Save text",
+                                           command=lambda: save_to_file(decrypted, entry_path_decrypted))
+            button_save_decrypted.place(anchor=E, relx=0.97, rely=0.6)
 
             text = Text(width=50, height=13)
-            text.insert(INSERT, encrypted)
+            text.insert(INSERT, decrypted)
             text.configure(state='disabled')
             scroll = Scrollbar(command=text.yview)
-            scroll.pack(side=LEFT, fill=Y)
-            text.pack(side=LEFT, padx=55)
+            scroll.place(relx=0, rely=0.7, relheight=0.3)
+            text.place(anchor=N, relx=0.5, rely=0.7)
             text.config(yscrollcommand=scroll.set)
 
         def insert_path():
-            file_to_encrypt = entry_path.get()
+            file_to_decrypt = entry_path.get()
             label_shift = Label(self, text="    Enter shift...         "
                                            "                                       ...or insert path to key-file")
             label_shift.config(bd=20)
@@ -250,12 +317,61 @@ class CaesarDecryptionWindow(Frame):
             entry_shift.pack(side=LEFT, padx=15, anchor=N)
             entry_path_shift = Entry(self, width=10)
             button_shift = Button(self, text="Enter",
-                                  command=lambda: insert_keyword(file_to_encrypt, entry_shift, entry_path_shift))
+                                  command=lambda: insert_keyword(file_to_decrypt, entry_shift, entry_path_shift))
             button_shift.pack(side=LEFT, anchor=N)
             button_path_shift = Button(self, text="Enter",
-                                       command=lambda: insert_keyword(file_to_encrypt, entry_shift, entry_path_shift))
+                                       command=lambda: insert_keyword(file_to_decrypt, entry_shift, entry_path_shift))
             button_path_shift.pack(side=RIGHT, padx=15, anchor=N)
             entry_path_shift.pack(side=RIGHT, anchor=N)
+
+        label_path = Label(self, text="Enter path to file")
+        label_path.config(bd=20)
+        label_path.pack(side=TOP, pady=5)
+        entry_path = Entry(self, width=50)
+        entry_path.pack(side=TOP)
+        button_path = Button(self, text="Enter", command=insert_path)
+        button_path.pack(side=TOP)
+
+
+class FrequencyAnalysisWindow(Frame):
+
+    def __init__(self, parent, controller):
+        Frame.__init__(self, parent)
+        self.controller = controller
+
+        def save_to_file(encrypted, entry_path_to_save):
+            path_to_save = entry_path_to_save.get()
+            file_to_save = open(path_to_save, 'w')
+            file_to_save.write(encrypted)
+            file_to_save.close()
+
+        def insert_path():
+            path_to_decrypt = entry_path.get()
+            file_to_decrypt = open(path_to_decrypt, 'r')
+            to_decrypt = file_to_decrypt.read()
+
+            decrypted = ""
+            if not check_text(to_decrypt):
+                decrypted = "Text contains wrong symbols!"
+            else:
+                standard_file = open("standard.txt")
+                standard_text = standard_file.read()
+                decrypted = frequency_analysis(to_decrypt, standard_text)
+
+            entry_path_decrypted = Entry(self, width=40)
+            entry_path_decrypted.place(anchor=CENTER, relx=0.45, rely=0.3)
+            button_save_decrypted = Button(self, text="Save text",
+                                           command=lambda: save_to_file(decrypted, entry_path_decrypted))
+            button_save_decrypted.place(anchor=E, relx=0.97, rely=0.3)
+
+            text = Text(width=50, height=40)
+            text.insert(INSERT, decrypted)
+            text.configure(state='disabled')
+            scroll = Scrollbar(command=text.yview)
+            scroll.place(relx=0, rely=0.4, relheight=0.6)
+            text.place(anchor=N, relx=0.5, rely=0.4)
+            text.config(yscrollcommand=scroll.set)
+
 
         label_path = Label(self, text="Enter path to file")
         label_path.config(bd=20)
@@ -287,26 +403,33 @@ class VigenereEncryptionWindow(Frame):
         def insert_keyword(path_to_file, entry_shift):
             keyword = entry_shift.get()
             file = open(path_to_file)
-            encrypted = vigenere_encryption(file.read(), keyword)
+
+            to_encrypt = file.read()
+
+            encrypted = ""
+            if not check_text(to_encrypt):
+                encrypted = "Text contains wrong symbols!"
+            else:
+                encrypted = vigenere_encryption(to_encrypt, keyword)
 
             entry_path_encrypted = Entry(self, width=15)
-            entry_path_encrypted.pack(side=LEFT, padx=12)
+            entry_path_encrypted.place(anchor=CENTER, relx=0.17, rely=0.6)
             button_save_encrypted = Button(self, text="Save text",
                                            command=lambda: save_to_file(encrypted, entry_path_encrypted))
-            button_save_encrypted.pack(side=LEFT)
+            button_save_encrypted.place(anchor=E, relx=0.47, rely=0.6)
 
             entry_path_key = Entry(self, width=15)
+            entry_path_key.place(anchor=CENTER, relx=0.67, rely=0.6)
             button_save_key = Button(self, text="Save key",
                                      command=lambda: save_key_to_file(keyword, entry_path_key))
-            button_save_key.pack(side=RIGHT, padx=12)
-            entry_path_key.pack(side=RIGHT)
+            button_save_key.place(anchor=E, relx=0.97, rely=0.6)
 
             text = Text(width=50, height=13)
             text.insert(INSERT, encrypted)
             text.configure(state='disabled')
             scroll = Scrollbar(command=text.yview)
-            scroll.pack(side=LEFT, fill=Y)
-            text.pack(side=LEFT, padx=55)
+            scroll.place(relx=0, rely=0.7, relheight=0.3)
+            text.place(anchor=N, relx=0.5, rely=0.7)
             text.config(yscrollcommand=scroll.set)
 
         def insert_path():
@@ -354,24 +477,30 @@ class VigenereDecryptionWindow(Frame):
                 key_file = open(key_path_to_file)
                 keyword = key_file.read()
 
-            encrypted = vigenere_decryption(file.read(), keyword)
+            to_decrypt = file.read()
 
-            entry_path_encrypted = Entry(self, width=50)
-            button_save_encrypted = Button(self, text="Save text",
-                                           command=lambda: save_to_file(encrypted, entry_path_encrypted))
-            button_save_encrypted.pack(side=BOTTOM, pady=20)
-            entry_path_encrypted.pack(side=BOTTOM)
+            decrypted = ""
+            if not check_text(to_decrypt):
+                decrypted = "Text contains wrong symbols!"
+            else:
+                decrypted = vigenere_decryption(to_decrypt, keyword)
+
+            entry_path_decrypted = Entry(self, width=40)
+            entry_path_decrypted.place(anchor=CENTER, relx=0.45, rely=0.6)
+            button_save_decrypted = Button(self, text="Save text",
+                                           command=lambda: save_to_file(decrypted, entry_path_decrypted))
+            button_save_decrypted.place(anchor=E, relx=0.97, rely=0.6)
 
             text = Text(width=50, height=13)
-            text.insert(INSERT, encrypted)
+            text.insert(INSERT, decrypted)
             text.configure(state='disabled')
             scroll = Scrollbar(command=text.yview)
-            scroll.pack(side=LEFT, fill=Y)
-            text.pack(side=LEFT, padx=55)
+            scroll.place(relx=0, rely=0.7, relheight=0.3)
+            text.place(anchor=N, relx=0.5, rely=0.7)
             text.config(yscrollcommand=scroll.set)
 
         def insert_path():
-            file_to_encrypt = entry_path.get()
+            file_to_decrypt = entry_path.get()
             label_shift = Label(self, text="    Enter keyword...         "
                                            "                                       ...or insert path to key-file")
             label_shift.config(bd=20)
@@ -380,10 +509,10 @@ class VigenereDecryptionWindow(Frame):
             entry_shift.pack(side=LEFT, padx=15, anchor=N)
             entry_path_shift = Entry(self, width=10)
             button_shift = Button(self, text="Enter",
-                                  command=lambda: insert_keyword(file_to_encrypt, entry_shift, entry_path_shift))
+                                  command=lambda: insert_keyword(file_to_decrypt, entry_shift, entry_path_shift))
             button_shift.pack(side=LEFT, anchor=N)
             button_path_shift = Button(self, text="Enter",
-                                       command=lambda: insert_keyword(file_to_encrypt, entry_shift, entry_path_shift))
+                                       command=lambda: insert_keyword(file_to_decrypt, entry_shift, entry_path_shift))
             button_path_shift.pack(side=RIGHT, padx=15, anchor=N)
             entry_path_shift.pack(side=RIGHT, anchor=N)
 
@@ -418,27 +547,34 @@ class VernamEncryptionWindow(Frame):
 
         def insert_path():
             file = open(entry_path.get())
-            encrypted = vernam_encryption(file.read())
+
+            to_encrypt = file.read()
+
+            encrypted = ""
+            if not check_text(to_encrypt):
+                encrypted = "Text contains wrong symbols!"
+            else:
+                encrypted = vernam_encryption(to_encrypt)
 
             entry_path_encrypted = Entry(self, width=15)
-            entry_path_encrypted.pack(side=LEFT, padx=12, anchor=N, pady=40)
+            entry_path_encrypted.place(anchor=CENTER, relx=0.17, rely=0.4)
             button_save_encrypted = Button(self, text="Save text",
                                            command=lambda: save_to_file(encrypted[0], entry_path_encrypted))
-            button_save_encrypted.pack(side=LEFT, anchor=N, pady=40)
+            button_save_encrypted.place(anchor=E, relx=0.47, rely=0.4)
 
             keyword = encrypted[1]
             entry_path_key = Entry(self, width=15)
+            entry_path_key.place(anchor=CENTER, relx=0.67, rely=0.4)
             button_save_key = Button(self, text="Save key",
                                      command=lambda: save_key_to_file(keyword, entry_path_key))
-            button_save_key.pack(side=RIGHT, padx=12, anchor=N, pady=40)
-            entry_path_key.pack(side=RIGHT, anchor=N, pady=40)
+            button_save_key.place(anchor=E, relx=0.97, rely=0.4)
 
-            text = Text(width=50, height=13)
+            text = Text(width=50, height=30)
             text.insert(INSERT, encrypted[0])
             text.configure(state='disabled')
             scroll = Scrollbar(command=text.yview)
-            scroll.pack(side=LEFT, fill=Y)
-            text.pack(side=LEFT, padx=55)
+            scroll.place(relx=0, rely=0.5, relheight=0.5)
+            text.place(anchor=N, relx=0.5, rely=0.5)
             text.config(yscrollcommand=scroll.set)
 
         label_path = Label(self, text="Enter path to file")
@@ -463,7 +599,6 @@ class VernamDecryptionWindow(Frame):
             file_to_save.close()
 
         def insert_keyword(path_to_file, entry_path_shift):
-
             file = open(path_to_file)
 
             key_path_to_file = entry_path_shift.get()
@@ -477,31 +612,37 @@ class VernamDecryptionWindow(Frame):
 
             keys = temp
 
-            decrypted = vernam_decryption(file.read(), keys)
+            to_decrypt = file.read()
 
-            entry_path_encrypted = Entry(self, width=50)
-            button_save_encrypted = Button(self, text="Save text",
-                                           command=lambda: save_to_file(decrypted, entry_path_encrypted))
-            entry_path_encrypted.pack(side=TOP, pady=20)
-            button_save_encrypted.pack(side=TOP)
+            decrypted = ""
+            if not check_text(to_decrypt):
+                decrypted = "Text contains wrong symbols!"
+            else:
+                decrypted = vernam_decryption(to_decrypt, keys)
+
+            entry_path_decrypted = Entry(self, width=40)
+            entry_path_decrypted.place(anchor=CENTER, relx=0.45, rely=0.6)
+            button_save_decrypted = Button(self, text="Save text",
+                                           command=lambda: save_to_file(decrypted, entry_path_decrypted))
+            button_save_decrypted.place(anchor=E, relx=0.97, rely=0.6)
 
             text = Text(width=50, height=13)
             text.insert(INSERT, decrypted)
             text.configure(state='disabled')
             scroll = Scrollbar(command=text.yview)
-            scroll.pack(side=LEFT, fill=Y)
-            text.pack(side=LEFT, padx=55)
+            scroll.place(relx=0, rely=0.7, relheight=0.3)
+            text.place(anchor=N, relx=0.5, rely=0.7)
             text.config(yscrollcommand=scroll.set)
 
         def insert_path():
-            file_to_encrypt = entry_path.get()
+            file_to_decrypt = entry_path.get()
             label_shift = Label(self, text="Insert path to key-file")
             label_shift.config(bd=20)
             label_shift.pack(side=TOP)
             entry_path_shift = Entry(self, width=50)
             entry_path_shift.pack(side=TOP)
             button_path_shift = Button(self, text="Enter",
-                                       command=lambda: insert_keyword(file_to_encrypt, entry_path_shift))
+                                       command=lambda: insert_keyword(file_to_decrypt, entry_path_shift))
             button_path_shift.pack(side=TOP)
 
         label_path = Label(self, text="Enter path to file")
@@ -516,20 +657,3 @@ class VernamDecryptionWindow(Frame):
 if __name__ == "__main__":
     window = Window()
     window.mainloop()
-
-
-# text = """"""
-# while True:
-#     new_line = input()
-#     if new_line:
-#         if text != """""":
-#             text += "\n"
-#         text += new_line
-#     else:
-#         break
-#
-# text = text.upper()
-#
-# dec = vigenere_encryption(text, "LEMON")
-# print(dec)
-# print(vigenere_decryption(dec, "LEMON"))
